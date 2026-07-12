@@ -22,10 +22,8 @@ plenty for this.
 Dodo dashboard → Products → create 3 one-time products:
 
 | Product | Price |
-|---|---|
-| EML→PDF Starter Pack (20 files) | $1.49 |
-| EML→PDF Big Pack (120 files) | $7.00 |
-| EML→PDF Lifetime | $50.00 |
+
+| EML→PDF Lifetime | $9.00 |
 
 Copy each `product_id` into `lib/products.js`.
 
