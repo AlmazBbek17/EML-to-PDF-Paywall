@@ -1,25 +1,19 @@
 // routes/eml2pdf.js
 //
-// Deliberately minimal version: one product (lifetime unlock via a static
-// Dodo Payment Link), no Google OAuth, no custom checkout session
-// creation. The extension sends the browser straight to the Payment Link
-// URL; this server's only job is to (a) receive the webhook when someone
-// pays and mark that email as lifetime, and (b) let the extension ask
-// "is this email unlocked?" so it can restore access after payment.
-//
-// TRADEOFF, on purpose: /balance takes a plain email with no proof of
-// ownership. Anyone who knows (or guesses) an email that has paid could
-// type it in and get unlocked too. For a $5 one-time consumer tool this
-// is an accepted tradeoff for simplicity -- there's no password/account
-// system to abuse, and the worst case is someone free-rides on a stranger
-// they'd have to already know paid. If that ever becomes a real problem,
-// swap this for the Google-verified version instead (same DB, same
-// grantPurchase logic -- just re-add id_token verification here).
+// One product (lifetime unlock via a static Dodo Payment Link). The
+// person signs in with Google (chrome.identity.getAuthToken, verified
+// server-side against Google's tokeninfo endpoint) BEFORE paying, so:
+//  (a) the email carried over to the Dodo Payment Link -- and therefore
+//      the email the webhook grants PRO status to -- is one they've
+//      actually proven they own, and
+//  (b) checking "is this account unlocked?" also requires proving you
+//      own that email, closing the earlier plain-email-lookup gap.
 
 const express = require('express');
 const { Webhook } = require('standardwebhooks');
 const { makeCreditsStore } = require('../lib/credits');
 const { findByDodoProductId } = require('../lib/products');
+const { verifyGoogleAccessToken } = require('../lib/google-auth');
 
 let _wh = null;
 function getWebhookVerifier() {
@@ -38,18 +32,38 @@ module.exports = function eml2pdfRoutes(pool) {
   const credits = makeCreditsStore(pool);
   const router = express.Router();
 
-  // ---- Check / restore lifetime status --------------------------------
+  // ---- Sign in: verify the token, hand back the confirmed email --------
+  router.post('/auth/google', async (req, res) => {
+    try {
+      const { accessToken } = req.body;
+      if (!accessToken) return res.status(400).json({ error: 'accessToken required' });
+
+      const { email, emailVerified } = await verifyGoogleAccessToken(accessToken);
+      if (!emailVerified) return res.status(403).json({ error: 'Email not verified with Google' });
+
+      res.json({ email });
+    } catch (err) {
+      console.error('[eml2pdf] /auth/google failed:', err);
+      res.status(401).json({ error: 'Invalid Google token' });
+    }
+  });
+
+  // ---- Check / restore lifetime status ----------------------------------
+  // Now requires the SAME verified-token proof as sign-in -- no more
+  // trusting a plain email string with no proof of ownership.
   router.post('/balance', async (req, res) => {
     try {
-      const email = (req.body.email || '').trim().toLowerCase();
-      if (!email || !email.includes('@')) {
-        return res.status(400).json({ error: 'Valid email required' });
-      }
+      const { accessToken } = req.body;
+      if (!accessToken) return res.status(400).json({ error: 'accessToken required' });
+
+      const { email, emailVerified } = await verifyGoogleAccessToken(accessToken);
+      if (!emailVerified) return res.status(403).json({ error: 'Email not verified with Google' });
+
       const balance = await credits.getBalance(email);
       res.json({ email, ...balance });
     } catch (err) {
       console.error('[eml2pdf] /balance failed:', err);
-      res.status(500).json({ error: 'Server error' });
+      res.status(401).json({ error: 'Invalid Google token' });
     }
   });
 
