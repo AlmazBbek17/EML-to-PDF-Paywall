@@ -32,8 +32,14 @@ module.exports = function eml2pdfRoutes(pool) {
   const credits = makeCreditsStore(pool);
   const router = express.Router();
 
+  // NOTE: this router is mounted in server.js BEFORE the global
+  // express.json() middleware (on purpose -- the webhook route below
+  // needs the raw, unparsed body to verify Dodo's signature). That means
+  // every OTHER route here needs its own express.json() explicitly, since
+  // it won't inherit one from further up the chain. Don't remove these.
+
   // ---- Sign in: verify the token, hand back the confirmed email --------
-  router.post('/auth/google', async (req, res) => {
+  router.post('/auth/google', express.json(), async (req, res) => {
     try {
       const { accessToken } = req.body;
       if (!accessToken) return res.status(400).json({ error: 'accessToken required' });
@@ -51,7 +57,7 @@ module.exports = function eml2pdfRoutes(pool) {
   // ---- Check / restore lifetime status ----------------------------------
   // Now requires the SAME verified-token proof as sign-in -- no more
   // trusting a plain email string with no proof of ownership.
-  router.post('/balance', async (req, res) => {
+  router.post('/balance', express.json(), async (req, res) => {
     try {
       const { accessToken } = req.body;
       if (!accessToken) return res.status(400).json({ error: 'accessToken required' });
