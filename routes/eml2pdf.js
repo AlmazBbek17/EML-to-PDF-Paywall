@@ -119,6 +119,7 @@ module.exports = function eml2pdfRoutes(pool) {
           dodoPaymentId,
           credits: product.credits,
           isLifetime: product.lifetime,
+          dayPassHours: product.dayPassHours || 0,
         });
 
         res.status(200).send('ok');
