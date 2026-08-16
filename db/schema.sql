@@ -3,10 +3,11 @@
 -- one-command way to apply this).
 
 CREATE TABLE IF NOT EXISTS eml2pdf_credits (
-  email       TEXT PRIMARY KEY,
-  credits     INTEGER NOT NULL DEFAULT 0,
-  lifetime    BOOLEAN NOT NULL DEFAULT FALSE,
-  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  email             TEXT PRIMARY KEY,
+  credits           INTEGER NOT NULL DEFAULT 0,
+  lifetime          BOOLEAN NOT NULL DEFAULT FALSE,
+  day_pass_expires  TIMESTAMPTZ,
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS eml2pdf_purchases (
@@ -18,3 +19,7 @@ CREATE TABLE IF NOT EXISTS eml2pdf_purchases (
 );
 
 CREATE INDEX IF NOT EXISTS idx_eml2pdf_purchases_email ON eml2pdf_purchases (email);
+
+-- Safe to re-run: adds the column if this schema is being applied against
+-- a database that already has the table from before day passes existed.
+ALTER TABLE eml2pdf_credits ADD COLUMN IF NOT EXISTS day_pass_expires TIMESTAMPTZ;
